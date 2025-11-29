@@ -1,6 +1,6 @@
 这是一个由[`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app)引导的[Next.js](https://nextjs.org)项目。
 
-##入门
+## 入门
 
 首先，运行开发服务器：
 
@@ -26,7 +26,7 @@ npm run build
 
 这个项目使用[`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts)来自动优化和加载[Geist](https://vercel.com/font)， Vercel的一个新字体家族。
 
-##了解更多
+## 了解更多
 
 要了解更多关于Next.js的信息，请查看以下资源：
 
@@ -35,7 +35,7 @@ npm run build
 
 你可以查看[Next.js GitHub仓库](https://github.com/vercel/next.js)——欢迎你的反馈和贡献！
 
-##部署到Vercel上
+## 部署到Vercel上
 
 部署你的Next.js应用最简单的方法是使用Next.js创建者的[Vercel平台](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme)。
 
