@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    ports:
+      - "2266:2266"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/public/uploads
+    environment:
+      - DATABASE_URL=file:/app/data/dev.db
+      - NEXT_PUBLIC_SITE_URL=http://localhost:2266
+    restart: always

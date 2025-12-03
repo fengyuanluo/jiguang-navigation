@@ -1,16 +1,40 @@
-# 极光导航
-**轻量级的网页导航**
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-[![GitHub Stars](https://img.shields.io/github/stars/sxt2204/jiguang-navigation?style=flat-square&logo=github&color=yellow)](https://github.com/sxt2204/jiguang-navigation/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/sxt2204/jiguang-navigation?style=flat-square&logo=github&color=blue)](https://github.com/sxt2204/jiguang-navigation/network/members)
+## Getting Started
 
-## 部署
-请参照[README_NEXTAPP](README_NEXTAPP.md)
+First, run the development server:
 
-## 样例站
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-[jg.cici.one](jg.cici.one)
-用户：admin
-密码：123456
+Open [http://localhost:2266](http://localhost:2266) with your browser to see the result.
 
-### 该项目还在更新，目前没有稳定版本
+## Docker Deployment
+
+See [DEPLOY.md](DEPLOY.md) and [VPS_GUIDE.md](VPS_GUIDE.md) for detailed deployment instructions.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
