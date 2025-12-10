@@ -13,6 +13,38 @@ export async function GET() {
             prisma.user.findUnique({ where: { username: 'admin' } })
         ]);
 
+        let categoriesList = categories;
+
+        // Fallback: 若分类表为空但站点存在，基于站点动态生成分类并尝试补齐数据库
+        if (!categoriesList.length && sites.length) {
+            const unique = Array.from(new Set(sites.map((s) => s.category).filter(Boolean)));
+            categoriesList = unique.map((name, index) => ({
+                id: name,
+                name,
+                order: index,
+                color: '#6366F1',
+                isHidden: false
+            }));
+
+            // 尝试写回数据库，确保下次直接有分类
+            for (const cat of categoriesList) {
+                try {
+                    await prisma.category.upsert({
+                        where: { name: cat.name },
+                        update: {},
+                        create: {
+                            name: cat.name,
+                            order: cat.order,
+                            color: cat.color,
+                            isHidden: cat.isHidden
+                        }
+                    });
+                } catch (e) {
+                    console.error('[Init API] Fallback category upsert failed:', e);
+                }
+            }
+        }
+
         console.log('[Init API] Settings raw:', settings ? 'found' : 'null');
         console.log('[Init API] Settings config:', settings?.config?.substring(0, 200));
 
@@ -43,7 +75,7 @@ export async function GET() {
 
         return NextResponse.json({
             sites,
-            categories,
+            categories: categoriesList,
             settings: parsedSettings,
             hasUser: !!user
         });

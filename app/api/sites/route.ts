@@ -1,8 +1,28 @@
 import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { downloadAndSaveIcon, saveBase64Icon, deleteIcon } from '@/lib/icon-downloader';
 
 const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+const DEFAULT_CATEGORY_COLOR = '#6366F1';
+
+async function ensureCategory(name?: string | null) {
+    if (!name) return;
+    try {
+        await prisma.category.upsert({
+            where: { name },
+            update: {},
+            create: {
+                name,
+                order: 0,
+                color: DEFAULT_CATEGORY_COLOR,
+                isHidden: false
+            }
+        });
+    } catch (error) {
+        console.error('[Sites API] ensureCategory error:', error);
+    }
+}
 
 export async function POST(request: Request) {
     try {
@@ -37,6 +57,8 @@ export async function POST(request: Request) {
                 }
             }
         }
+
+        await ensureCategory(body.category);
 
         const site = await prisma.site.create({
             data: {
@@ -88,6 +110,7 @@ export async function PUT(request: Request) {
         if (Array.isArray(body)) {
             // 串行更新，避免SQLite锁冲突
             for (const site of body) {
+                await ensureCategory(site.category);
                 await prisma.site.update({
                     where: { id: site.id },
                     data: {
@@ -127,6 +150,8 @@ export async function PUT(request: Request) {
                 }
             }
         }
+
+        await ensureCategory(body.category);
 
         const site = await prisma.site.update({
             where: { id: body.id },
