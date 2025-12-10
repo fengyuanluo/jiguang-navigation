@@ -3,6 +3,10 @@ const STORAGE_KEYS = {
   SETTINGS: 'aurora_settings'
 };
 
+// 分组数据量大，使用 local 避开 sync 8KB 单项限制；设置数据小且希望同步，仍用 sync
+const GROUPS_STORE = chrome.storage.local;
+const SETTINGS_STORE = chrome.storage.sync;
+
 const tabs = document.querySelectorAll('.tab');
 const views = {
   home: document.getElementById('home-view'),
@@ -50,23 +54,23 @@ function showToast(msg) {
 
 // ---------- Storage Helpers ----------
 async function loadGroups() {
-  const { [STORAGE_KEYS.GROUPS]: stored = [] } = await chrome.storage.sync.get(STORAGE_KEYS.GROUPS);
+  const { [STORAGE_KEYS.GROUPS]: stored = [] } = await GROUPS_STORE.get(STORAGE_KEYS.GROUPS);
   groups = Array.isArray(stored) ? stored : [];
 }
 
 async function saveGroups(next) {
   groups = next;
-  await chrome.storage.sync.set({ [STORAGE_KEYS.GROUPS]: next });
+  await GROUPS_STORE.set({ [STORAGE_KEYS.GROUPS]: next });
 }
 
 async function loadSettings() {
-  const { [STORAGE_KEYS.SETTINGS]: settings = {} } = await chrome.storage.sync.get(STORAGE_KEYS.SETTINGS);
+  const { [STORAGE_KEYS.SETTINGS]: settings = {} } = await SETTINGS_STORE.get(STORAGE_KEYS.SETTINGS);
   settingsCache = settings;
   return settings;
 }
 
 async function saveSettings(settings) {
-  await chrome.storage.sync.set({ [STORAGE_KEYS.SETTINGS]: settings });
+  await SETTINGS_STORE.set({ [STORAGE_KEYS.SETTINGS]: settings });
 }
 
 // ---------- Render ----------

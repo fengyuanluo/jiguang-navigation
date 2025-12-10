@@ -4,6 +4,9 @@ const STORAGE_KEYS = {
   SETTINGS: 'aurora_settings'
 };
 
+const GROUPS_STORE = chrome.storage.local; // 分组体积大，使用 local 避免 sync 单项 8KB 限制
+const SETTINGS_STORE = chrome.storage.sync; // 设置体积小，仍用 sync 以便跨设备
+
 function buildHeaders(settings) {
   const headers = { 'Content-Type': 'application/json' };
   if (settings?.username || settings?.password) {
@@ -14,7 +17,7 @@ function buildHeaders(settings) {
 }
 
 async function getSettings() {
-  const { [STORAGE_KEYS.SETTINGS]: settings = {} } = await chrome.storage.sync.get(STORAGE_KEYS.SETTINGS);
+  const { [STORAGE_KEYS.SETTINGS]: settings = {} } = await SETTINGS_STORE.get(STORAGE_KEYS.SETTINGS);
   return settings;
 }
 
@@ -24,7 +27,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && changes[STORAGE_KEYS.GROUPS]) {
+  if ((area === 'local' || area === 'sync') && changes[STORAGE_KEYS.GROUPS]) {
     rebuildContextMenus();
   }
 });
@@ -38,7 +41,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 async function rebuildContextMenus() {
   await chrome.contextMenus.removeAll();
-  const { [STORAGE_KEYS.GROUPS]: groups = [] } = await chrome.storage.sync.get(STORAGE_KEYS.GROUPS);
+  const { [STORAGE_KEYS.GROUPS]: groups = [] } = await GROUPS_STORE.get(STORAGE_KEYS.GROUPS);
   chrome.contextMenus.create({
     id: MENU_ROOT_ID,
     title: '添加到书签分组',
@@ -67,7 +70,7 @@ async function rebuildContextMenus() {
 }
 
 async function addBookmarkToGroup(groupId, bookmark) {
-  const { [STORAGE_KEYS.GROUPS]: groups = [] } = await chrome.storage.sync.get(STORAGE_KEYS.GROUPS);
+  const { [STORAGE_KEYS.GROUPS]: groups = [] } = await GROUPS_STORE.get(STORAGE_KEYS.GROUPS);
   const target = groups.find((g) => g.id === groupId);
   const settings = await getSettings();
   const host = settings?.host?.replace(/\/$/, '');
