@@ -224,23 +224,48 @@ export function SettingsPanel({
     };
 
     // --- 书签导入/导出（标准 Netscape HTML） ---
+    // 递归解析 Netscape 书签：支持多级分类，合并同名分类
     const parseBookmarksHtml = (htmlText: string) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlText, 'text/html');
-        const result: { name: string; bookmarks: { title: string; url: string }[] }[] = [];
-        const h3List = Array.from(doc.querySelectorAll('dt > h3'));
-        h3List.forEach((h3) => {
-            const name = (h3.textContent || '').trim() || '未命名';
-            const dl = h3.parentElement?.nextElementSibling;
-            if (dl && dl.tagName.toLowerCase() === 'dl') {
-                const anchors = Array.from(dl.querySelectorAll('a'));
-                const bookmarks = anchors
-                    .map((a) => ({ title: a.textContent || a.getAttribute('href') || '', url: a.getAttribute('href') || '' }))
-                    .filter((b) => !!b.url);
-                if (bookmarks.length) result.push({ name, bookmarks });
+        const root = doc.querySelector('dl');
+        if (!root) return [];
+        const map = new Map<string, { name: string; bookmarks: { title: string; url: string }[] }>();
+
+        const ensureGroup = (name: string) => {
+            if (!map.has(name)) {
+                map.set(name, { name, bookmarks: [] });
             }
-        });
-        return result;
+            return map.get(name)!;
+        };
+
+        const walk = (dl: Element, currentCategory: string | null) => {
+            const children = Array.from(dl.children);
+            for (let i = 0; i < children.length; i++) {
+                const node = children[i];
+                if (node.tagName?.toLowerCase() !== 'dt') continue;
+                const h3 = node.querySelector('h3');
+                const aTag = node.querySelector('a');
+
+                if (h3) {
+                    const catName = (h3.textContent || '').trim() || '未命名';
+                    const next = node.nextElementSibling;
+                    if (next && next.tagName?.toLowerCase() === 'dl') {
+                        walk(next, catName);
+                    }
+                } else if (aTag) {
+                    const title = aTag.textContent || aTag.getAttribute('href') || '';
+                    const url = aTag.getAttribute('href') || '';
+                    if (!url) continue;
+                    const groupName = currentCategory || '未命名';
+                    const group = ensureGroup(groupName);
+                    group.bookmarks.push({ title, url });
+                }
+            }
+        };
+
+        walk(root, null);
+        return Array.from(map.values()).filter((g) => g.bookmarks.length > 0);
     };
 
     const buildBookmarksHtml = (groupsData: { name: string; bookmarks: { title: string; url: string }[] }[]) => {
@@ -1345,14 +1370,13 @@ export function SettingsPanel({
                                             <Download size={32} className="mx-auto mb-3 text-purple-500" /><h4
                                                 className="font-bold mb-1">导出书签</h4><p className="text-xs opacity-60">标准书签 HTML</p></div>
                                         <div
-                                            className={`p-5 rounded-2xl border text-center transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-orange-500/20' : 'bg-slate-50 border-slate-200 hover:bg-orange-50'}`}>
+                                            className={`p-5 rounded-2xl border text-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-orange-500/20' : 'bg-slate-50 border-slate-200 hover:bg-orange-50'}`}
+                                            onClick={() => bookmarkFileInputRef.current?.click()}>
                                             <UploadCloud size={32} className="mx-auto mb-3 text-orange-500" />
                                             <h4 className="font-bold mb-1">导入书签</h4>
                                             <p className="text-xs opacity-60">支持 Netscape HTML</p>
                                             <input type="file" ref={bookmarkFileInputRef} className="hidden" accept=".html,.htm"
                                                 onChange={handleBookmarkImport} />
-                                            <Button variant="outline" size="sm" className="mt-2"
-                                                onClick={() => bookmarkFileInputRef.current?.click()}>选择文件</Button>
                                         </div>
                                     </div>
                                 </div>
