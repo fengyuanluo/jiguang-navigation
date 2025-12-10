@@ -21,9 +21,6 @@ const settingHost = document.getElementById('setting-host');
 const settingUsername = document.getElementById('setting-username');
 const settingPassword = document.getElementById('setting-password');
 const btnSync = document.getElementById('btn-sync');
-const btnImport = document.getElementById('btn-import-bookmarks');
-const btnExport = document.getElementById('btn-export-bookmarks');
-const inputImport = document.getElementById('input-import-bookmarks');
 const toastEl = document.getElementById('toast');
 
 let groups = [];
@@ -186,156 +183,6 @@ async function handleSaveSettings(evt) {
   await fetchGroupsFromServer();
 }
 
-function parseBookmarksHtml(htmlText) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlText, 'text/html');
-  const rootDl = doc.querySelector('dl');
-  if (!rootDl) return [];
-  const result = [];
-
-  function collectAnchors(dl) {
-    const items = [];
-    for (const dt of dl.children) {
-      if (dt.tagName?.toLowerCase() !== 'dt') continue;
-      const first = dt.firstElementChild;
-      if (!first) continue;
-      if (first.tagName?.toLowerCase() === 'a') {
-        items.push({ title: first.textContent || first.href, url: first.href });
-      }
-    }
-    return items;
-  }
-
-  function walk(dl) {
-    for (let i = 0; i < dl.children.length; i++) {
-      const dt = dl.children[i];
-      if (dt.tagName?.toLowerCase() !== 'dt') continue;
-      const h3 = dt.querySelector('h3');
-      if (h3) {
-        const catName = h3.textContent?.trim() || '未命名';
-        const sibling = dt.nextElementSibling;
-        if (sibling && sibling.tagName?.toLowerCase() === 'dl') {
-          const bookmarks = collectAnchors(sibling);
-          if (bookmarks.length) {
-            result.push({ name: catName, bookmarks });
-          }
-          // 继续深入，以支持嵌套子分类
-          walk(sibling);
-        }
-      }
-    }
-  }
-
-  walk(rootDl);
-  return result;
-}
-
-function buildBookmarksHtml(groupsData) {
-  const now = Math.floor(Date.now() / 1000);
-  let html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
-<!-- This is an automatically generated file. -->
-<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
-<TITLE>Aurora Bookmarks</TITLE>
-<H1>Aurora Bookmarks</H1>
-<DL><p>
-`;
-  for (const group of groupsData) {
-    html += `    <DT><H3 ADD_DATE="${now}" LAST_MODIFIED="${now}">${group.name}</H3>\n    <DL><p>\n`;
-    for (const bm of group.bookmarks || []) {
-      const safeTitle = (bm.title || bm.url || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const url = bm.url || '';
-      html += `        <DT><A HREF="${url}" ADD_DATE="${now}">${safeTitle}</A>\n`;
-    }
-    html += '    </DL><p>\n';
-  }
-  html += '</DL><p>';
-  return html;
-}
-
-async function handleImportBookmarks(evt) {
-  const file = evt.target.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  const parsedGroups = parseBookmarksHtml(text);
-  if (!parsedGroups.length) {
-    showToast('未解析到书签');
-    return;
-  }
-
-  const host = settingsCache.host?.replace(/\/$/, '');
-  const headers = buildHeaders();
-  const now = Date.now();
-  let merged = [...groups];
-
-  for (const g of parsedGroups) {
-    const exist = merged.find((x) => x.name === g.name);
-    if (!exist) {
-      merged.push({
-        id: g.name,
-        name: g.name,
-        bookmarks: []
-      });
-    }
-    const target = merged.find((x) => x.name === g.name);
-    const currentUrls = new Set((target.bookmarks || []).map((b) => b.url));
-    const toAdd = [];
-    for (const bm of g.bookmarks || []) {
-      if (!bm.url || currentUrls.has(bm.url)) continue;
-      const item = { title: bm.title || bm.url, url: bm.url, createdAt: now };
-      target.bookmarks.push(item);
-      toAdd.push(item);
-      currentUrls.add(bm.url);
-    }
-
-    // 推送到服务器
-    if (host && toAdd.length) {
-      for (const bm of toAdd) {
-        const payload = {
-          id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
-          name: bm.title,
-          url: bm.url,
-          desc: '',
-          category: g.name,
-          color: '#6366F1',
-          icon: 'Globe',
-          iconType: 'auto',
-          order: Date.now(),
-          isHidden: false
-        };
-        try {
-          await fetch(`${host}/api/sites`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-          });
-        } catch (_) {
-          // ignore server failure; local已合并
-        }
-      }
-    }
-  }
-
-  await saveGroups(merged);
-  renderGroups();
-  renderGroupSelect();
-  showToast('导入完成');
-  inputImport.value = '';
-}
-
-function handleExportBookmarks() {
-  const html = buildBookmarksHtml(groups);
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Aurora_Bookmarks_${new Date().toISOString().slice(0,10)}.html`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('导出完成');
-}
-
 async function fetchGroupsFromServer() {
   if (!settingsCache.host) {
     homeTip.style.display = 'block';
@@ -404,8 +251,5 @@ tabs.forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset
 addForm.addEventListener('submit', handleAddBookmark);
 settingsForm.addEventListener('submit', handleSaveSettings);
 btnSync.addEventListener('click', fetchGroupsFromServer);
-btnImport.addEventListener('click', () => inputImport.click());
-btnExport.addEventListener('click', handleExportBookmarks);
-inputImport.addEventListener('change', handleImportBookmarks);
 
 init();

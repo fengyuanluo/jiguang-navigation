@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { FONTS, FRESH_BACKGROUND_COLORS } from '@/lib/constants';
+import { generateId } from '@/lib/utils';
 import { RangeControl } from '@/app/components/ui/RangeControl';
 import { NewCategoryInput } from '@/app/components/settings/NewCategoryInput';
 import { BackgroundPositionPreview } from '@/app/components/settings/BackgroundPositionPreview';
@@ -105,6 +106,7 @@ export function SettingsPanel({
     onDeleteSite
 }: SettingsPanelProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const bookmarkFileInputRef = useRef<HTMLInputElement>(null);
     const logoInputRef = useRef<HTMLInputElement>(null);
     const wallpaperInputRef = useRef<HTMLInputElement>(null);
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
@@ -219,6 +221,140 @@ export function SettingsPanel({
             reader.onload = (e: any) => handleImportData(JSON.parse(e.target.result));
             reader.readAsText(file);
         }
+    };
+
+    // --- 书签导入/导出（标准 Netscape HTML） ---
+    const parseBookmarksHtml = (htmlText: string) => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlText, 'text/html');
+        const result: { name: string; bookmarks: { title: string; url: string }[] }[] = [];
+        const h3List = Array.from(doc.querySelectorAll('dt > h3'));
+        h3List.forEach((h3) => {
+            const name = (h3.textContent || '').trim() || '未命名';
+            const dl = h3.parentElement?.nextElementSibling;
+            if (dl && dl.tagName.toLowerCase() === 'dl') {
+                const anchors = Array.from(dl.querySelectorAll('a'));
+                const bookmarks = anchors
+                    .map((a) => ({ title: a.textContent || a.getAttribute('href') || '', url: a.getAttribute('href') || '' }))
+                    .filter((b) => !!b.url);
+                if (bookmarks.length) result.push({ name, bookmarks });
+            }
+        });
+        return result;
+    };
+
+    const buildBookmarksHtml = (groupsData: { name: string; bookmarks: { title: string; url: string }[] }[]) => {
+        const now = Math.floor(Date.now() / 1000);
+        let html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file. -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Aurora Bookmarks</TITLE>
+<H1>Aurora Bookmarks</H1>
+<DL><p>
+`;
+        for (const group of groupsData) {
+            html += `    <DT><H3 ADD_DATE="${now}" LAST_MODIFIED="${now}">${group.name}</H3>\n    <DL><p>\n`;
+            for (const bm of group.bookmarks || []) {
+                const safeTitle = (bm.title || bm.url || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const url = bm.url || '';
+                html += `        <DT><A HREF="${url}" ADD_DATE="${now}">${safeTitle}</A>\n`;
+            }
+            html += '    </DL><p>\n';
+        }
+        html += '</DL><p>';
+        return html;
+    };
+
+    const handleBookmarkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        const parsed = parseBookmarksHtml(text);
+        if (!parsed.length) {
+            showToast('未解析到书签', 'error');
+            return;
+        }
+
+        const existingUrls = new Set(sites.map((s) => s.url));
+        const newCategories: string[] = [];
+        const newSites: any[] = [];
+
+        parsed.forEach((group) => {
+            const catName = group.name;
+            if (!categories.includes(catName) && !newCategories.includes(catName)) {
+                newCategories.push(catName);
+            }
+            group.bookmarks.forEach((bm) => {
+                if (!bm.url || existingUrls.has(bm.url)) return;
+                existingUrls.add(bm.url);
+                newSites.push({
+                    id: generateId(),
+                    name: bm.title || bm.url,
+                    url: bm.url,
+                    desc: '',
+                    category: catName,
+                    color: '#6366F1',
+                    icon: 'Globe',
+                    iconType: 'auto',
+                    order: sites.length + newSites.length,
+                    isHidden: false
+                });
+            });
+        });
+
+        // 本地合并分类
+        if (newCategories.length) {
+            const merged = [...categories, ...newCategories];
+            setCategories(merged);
+            const newColors = { ...categoryColors };
+            newCategories.forEach((c) => newColors[c] = newColors[c] || '#6366F1');
+            setCategoryColors(newColors);
+        }
+
+        if (!newSites.length) {
+            showToast('无新增书签', 'info');
+            return;
+        }
+
+        // 更新本地站点
+        setSites([...sites, ...newSites]);
+
+        // 推送到服务器（逐条，失败不阻塞）
+        for (const site of newSites) {
+            try {
+                await fetch('/api/sites', {
+                    method: 'POST',
+                    body: JSON.stringify(site)
+                });
+            } catch (_) { /* ignore */ }
+        }
+
+        showToast(`导入完成，新增 ${newSites.length} 条`);
+        if (bookmarkFileInputRef.current) bookmarkFileInputRef.current.value = '';
+    };
+
+    const handleBookmarkExport = () => {
+        const groupsData = categories.map((cat) => ({
+            name: cat,
+            bookmarks: sites.filter((s) => s.category === cat).map((s) => ({ title: s.name || s.url, url: s.url }))
+        })).filter((g) => g.bookmarks.length > 0);
+
+        if (!groupsData.length) {
+            showToast('没有可导出的书签', 'info');
+            return;
+        }
+
+        const html = buildBookmarksHtml(groupsData);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Aurora_Bookmarks_${new Date().toISOString().slice(0, 10)}.html`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showToast('书签已导出');
     };
 
     const handleLogoUpload = (e: any) => {
@@ -1203,6 +1339,21 @@ export function SettingsPanel({
                                             <RefreshCw size={32} className="mx-auto mb-3 text-blue-500" /><h4
                                                 className="font-bold mb-1">同步图标缓存</h4><p className="text-xs opacity-60">下载未缓存的
                                                     站点图标</p></div>
+
+                                        <div onClick={handleBookmarkExport}
+                                            className={`p-5 rounded-2xl border cursor-pointer text-center transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-purple-500/20' : 'bg-slate-50 border-slate-200 hover:bg-purple-50'}`}>
+                                            <Download size={32} className="mx-auto mb-3 text-purple-500" /><h4
+                                                className="font-bold mb-1">导出书签</h4><p className="text-xs opacity-60">标准书签 HTML</p></div>
+                                        <div
+                                            className={`p-5 rounded-2xl border text-center transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-orange-500/20' : 'bg-slate-50 border-slate-200 hover:bg-orange-50'}`}>
+                                            <UploadCloud size={32} className="mx-auto mb-3 text-orange-500" />
+                                            <h4 className="font-bold mb-1">导入书签</h4>
+                                            <p className="text-xs opacity-60">支持 Netscape HTML</p>
+                                            <input type="file" ref={bookmarkFileInputRef} className="hidden" accept=".html,.htm"
+                                                onChange={handleBookmarkImport} />
+                                            <Button variant="outline" size="sm" className="mt-2"
+                                                onClick={() => bookmarkFileInputRef.current?.click()}>选择文件</Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>)}
