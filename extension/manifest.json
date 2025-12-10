@@ -1,0 +1,19 @@
+{
+  "name": "Aurora Bookmark Manager",
+  "description": "分组管理、右键快速收藏、简单设置的极简书签助手。",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "action": {
+    "default_title": "Aurora Bookmarks",
+    "default_popup": "popup.html"
+  },
+  "permissions": ["storage", "contextMenus", "tabs", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "32": "icon32.png",
+    "128": "icon128.png"
+  }
+}
