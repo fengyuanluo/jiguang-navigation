@@ -18,12 +18,15 @@ export async function GET() {
         // Fallback: 若分类表为空但站点存在，基于站点动态生成分类并尝试补齐数据库
         if (!categoriesList.length && sites.length) {
             const unique = Array.from(new Set(sites.map((s) => s.category).filter(Boolean)));
+            const now = new Date();
             categoriesList = unique.map((name, index) => ({
                 id: name,
                 name,
                 order: index,
                 color: '#6366F1',
-                isHidden: false
+                isHidden: false,
+                createdAt: now,
+                updatedAt: now
             }));
 
             // 尝试写回数据库，确保下次直接有分类

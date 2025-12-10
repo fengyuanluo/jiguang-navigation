@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { downloadAndSaveIcon, saveBase64Icon, deleteIcon } from '@/lib/icon-downloader';
 
