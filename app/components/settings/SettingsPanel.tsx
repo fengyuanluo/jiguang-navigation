@@ -249,9 +249,15 @@ export function SettingsPanel({
 
                 if (h3) {
                     const catName = (h3.textContent || '').trim() || '未命名';
+                    // 兼容两种结构：有的导出文件将子 DL 作为下一个兄弟节点，
+                    // 也有的直接嵌套在当前 DT 内。
                     const next = node.nextElementSibling;
-                    if (next && next.tagName?.toLowerCase() === 'dl') {
-                        walk(next, catName);
+                    const childDl = node.querySelector(':scope > dl');
+                    const targetDl = (next && next.tagName?.toLowerCase() === 'dl')
+                        ? next
+                        : (childDl && childDl.tagName?.toLowerCase() === 'dl' ? childDl : null);
+                    if (targetDl) {
+                        walk(targetDl, catName);
                     }
                 } else if (aTag) {
                     const title = aTag.textContent || aTag.getAttribute('href') || '';
