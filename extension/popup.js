@@ -70,6 +70,7 @@ async function loadSettings() {
 }
 
 async function saveSettings(settings) {
+  settingsCache = settings;
   await SETTINGS_STORE.set({ [STORAGE_KEYS.SETTINGS]: settings });
 }
 
@@ -90,21 +91,42 @@ function renderGroups() {
 
     const header = document.createElement('div');
     header.className = 'group-header';
-    header.innerHTML = `<h4>${group.name}</h4><span>共 ${group.bookmarks?.length || 0} 条</span>`;
+    const h4 = document.createElement('h4');
+    h4.textContent = group.name;
+    const count = document.createElement('span');
+    count.textContent = `共 ${group.bookmarks?.length || 0} 条`;
+    header.appendChild(h4);
+    header.appendChild(count);
 
     const body = document.createElement('div');
     body.className = 'group-body';
-    body.style.display = 'none';
 
     (group.bookmarks || []).slice().reverse().forEach((bm) => {
       const item = document.createElement('div');
       item.className = 'bookmark';
-      item.innerHTML = `<a href="${bm.url}" target="_blank">${bm.title || bm.url}</a><span>${new URL(bm.url).hostname}</span>`;
+      const link = document.createElement('a');
+      link.href = bm.url;
+      link.target = '_blank';
+      link.textContent = bm.title || bm.url;
+
+      const host = document.createElement('span');
+      try {
+        host.textContent = new URL(bm.url).hostname;
+      } catch (_) {
+        host.textContent = '';
+      }
+
+      item.appendChild(link);
+      item.appendChild(host);
       body.appendChild(item);
     });
 
     header.addEventListener('click', () => {
-      body.style.display = body.style.display === 'none' ? 'block' : 'none';
+      const isOpen = body.classList.toggle('open');
+      if (isOpen) {
+        // 展开时滚动到顶部，避免首次打开时位置不正确
+        body.scrollTop = 0;
+      }
     });
 
     wrapper.appendChild(header);
@@ -149,7 +171,7 @@ async function handleAddBookmark(evt) {
         color: '#6366F1',
         icon: 'Globe',
         iconType: 'auto',
-        order: Date.now(),
+        order: Math.floor(Date.now() / 1000),
         isHidden: false
       };
       const resp = await fetch(`${host}/api/sites`, {
@@ -196,25 +218,31 @@ async function fetchGroupsFromServer() {
 
   try {
     const base = settingsCache.host.replace(/\/$/, '');
-    const resp = await fetch(`${base}/api/init`, { credentials: 'include' });
-    if (!resp.ok) throw new Error(`Server ${resp.status}`);
+    const resp = await fetch(`${base}/api/init`, {
+      credentials: 'include',
+      headers: buildHeaders()
+    });
+    if (!resp.ok) {
+      const msg = await resp.text().catch(() => '');
+      throw new Error(`Server ${resp.status}${msg ? `: ${msg}` : ''}`);
+    }
     const data = await resp.json();
-  const categories = Array.isArray(data.categories) ? data.categories : [];
-  const sites = Array.isArray(data.sites) ? data.sites : [];
+    const categories = Array.isArray(data.categories) ? data.categories : [];
+    const sites = Array.isArray(data.sites) ? data.sites : [];
 
-  const mapped = categories.map((cat) => {
-    const catName = cat.name || cat;
-    const catSites = sites.filter((s) => s.category === catName);
-    return {
-      id: catName || crypto.randomUUID(),
-      name: catName || '未命名',
-      bookmarks: catSites.map((s) => ({
-        title: s.name || s.url,
-        url: s.url,
-        createdAt: s.createdAt || Date.now()
-      }))
-    };
-  });
+    const mapped = categories.map((cat) => {
+      const catName = cat.name || cat;
+      const catSites = sites.filter((s) => s.category === catName);
+      return {
+        id: catName || crypto.randomUUID(),
+        name: catName || '未命名',
+        bookmarks: catSites.map((s) => ({
+          title: s.name || s.url,
+          url: s.url,
+          createdAt: s.createdAt || Date.now()
+        }))
+      };
+    });
 
     await saveGroups(mapped);
     renderGroups();

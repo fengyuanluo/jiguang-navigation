@@ -26,6 +26,11 @@ chrome.runtime.onInstalled.addListener(async () => {
   await rebuildContextMenus();
 });
 
+// 浏览器重启或 service worker 重新唤醒时也补充菜单
+chrome.runtime.onStartup?.addListener(async () => {
+  await rebuildContextMenus();
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if ((area === 'local' || area === 'sync') && changes[STORAGE_KEYS.GROUPS]) {
     rebuildContextMenus();
@@ -89,7 +94,7 @@ async function addBookmarkToGroup(groupId, bookmark) {
         color: '#6366F1',
         icon: 'Globe',
         iconType: 'auto',
-        order: Date.now(),
+        order: Math.floor(Date.now() / 1000),
         isHidden: false
       };
       const resp = await fetch(`${host}/api/sites`, {
@@ -109,5 +114,6 @@ async function addBookmarkToGroup(groupId, bookmark) {
     const deduped = g.bookmarks?.filter((b) => b.url !== bookmark.url) || [];
     return { ...g, bookmarks: [...deduped, { ...bookmark, createdAt: Date.now() }] };
   });
-  await chrome.storage.sync.set({ [STORAGE_KEYS.GROUPS]: next });
+  // 与弹窗存储保持一致，写回 local，保证右键菜单读取到最新分组
+  await GROUPS_STORE.set({ [STORAGE_KEYS.GROUPS]: next });
 }

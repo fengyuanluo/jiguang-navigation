@@ -49,3 +49,7 @@ next-env.d.ts
 
 # System
 Thumbs.db
+
+# 工具/本地导出
+.serena/
+OneNav_Export_*.html
