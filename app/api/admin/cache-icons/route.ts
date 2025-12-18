@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 import { downloadAndSaveIcon } from '@/lib/icon-downloader';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +9,7 @@ const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?do
 
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const sites = await prisma.site.findMany();
         let count = 0;
 

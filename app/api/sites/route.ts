@@ -1,9 +1,33 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { downloadAndSaveIcon, saveBase64Icon, deleteIcon } from '@/lib/icon-downloader';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
+import { normalizeSiteOrder } from '@/lib/site-order';
 
 const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 const DEFAULT_CATEGORY_COLOR = '#6366F1';
+
+function safeTrim(value: unknown) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeUrl(raw: unknown) {
+    const val = safeTrim(raw);
+    if (!val) return { ok: false as const, url: '' };
+    try {
+        // 仅用于校验合法性：尽量保留用户输入，避免自动补 `/` 导致 URL 变化
+        new URL(val);
+        return { ok: true as const, url: val };
+    } catch (_) {
+        // 兼容用户输入 google.com 这种“无协议”形式
+        try {
+            new URL(`https://${val}`);
+            return { ok: true as const, url: `https://${val}` };
+        } catch (_) {
+            return { ok: false as const, url: '' };
+        }
+    }
+}
 
 async function ensureCategory(name?: string | null) {
     if (!name) return;
@@ -25,7 +49,18 @@ async function ensureCategory(name?: string | null) {
 
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const body = await request.json();
+
+        const name = safeTrim(body?.name);
+        const category = safeTrim(body?.category);
+        const urlInfo = normalizeUrl(body?.url);
+        if (!name || !category || !urlInfo.ok) {
+            return NextResponse.json(
+                { error: '缺少必要字段或 URL 非法', details: { name: !!name, category: !!category, url: urlInfo.ok } },
+                { status: 400 }
+            );
+        }
 
         let initialIconType = body.iconType;
         let initialCustomIconUrl = body.customIconUrl;
@@ -36,9 +71,9 @@ export async function POST(request: Request) {
         // If custom URL (http), use it.
         // If Base64, save to disk.
 
-        if (body.iconType === 'auto' && body.url) {
+        if (body.iconType === 'auto' && urlInfo.url) {
             try {
-                const domain = new URL(body.url).hostname;
+                const domain = new URL(urlInfo.url).hostname;
                 downloadUrl = getFaviconUrl(domain);
                 initialIconType = 'upload'; // Switch to upload so frontend uses the URL
                 initialCustomIconUrl = downloadUrl; // Temporary remote URL
@@ -57,15 +92,15 @@ export async function POST(request: Request) {
             }
         }
 
-        await ensureCategory(body.category);
+        await ensureCategory(category);
 
         const site = await prisma.site.create({
             data: {
                 id: body.id,
-                name: body.name,
-                url: body.url,
+                name,
+                url: urlInfo.url,
                 desc: body.desc,
-                category: body.category,
+                category,
                 color: body.color,
                 icon: body.icon,
                 iconType: initialIconType,
@@ -76,7 +111,7 @@ export async function POST(request: Request) {
                 descColor: body.descColor,
                 titleSize: body.titleSize ? parseInt(body.titleSize) : null,
                 descSize: body.descSize ? parseInt(body.descSize) : null,
-                order: body.order || 0,
+                order: normalizeSiteOrder(body.order, 0),
                 isHidden: body.isHidden || false
             }
         });
@@ -94,12 +129,24 @@ export async function POST(request: Request) {
 
         return NextResponse.json(site);
     } catch (error) {
+        console.error('[Sites API] POST error:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('does not exist in the current database')) {
+            return NextResponse.json(
+                {
+                    error: '数据库结构不兼容（可能是旧版 dev.db 未升级），请先完成数据库迁移/重建。',
+                    details: process.env.NODE_ENV === 'production' ? undefined : message
+                },
+                { status: 500 }
+            );
+        }
         return NextResponse.json({ error: 'Failed to create site' }, { status: 500 });
     }
 }
 
 export async function PUT(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const body = await request.json();
         // Console log strictly limited
         if (!Array.isArray(body)) {
@@ -109,11 +156,13 @@ export async function PUT(request: Request) {
         if (Array.isArray(body)) {
             // 串行更新，避免SQLite锁冲突
             for (const site of body) {
+                const id = typeof site?.id === 'string' ? site.id : String(site?.id ?? '');
+                if (!id) continue;
                 await ensureCategory(site.category);
                 await prisma.site.update({
-                    where: { id: site.id },
+                    where: { id },
                     data: {
-                        order: site.order,
+                        order: normalizeSiteOrder(site.order, 0),
                         category: site.category,
                         isHidden: site.isHidden // Added isHidden support for batch update
                     }
@@ -122,14 +171,23 @@ export async function PUT(request: Request) {
             return NextResponse.json({ success: true });
         }
 
+        if (!body?.id) {
+            return NextResponse.json({ error: '缺少站点 ID' }, { status: 400 });
+        }
+
+        const urlInfo = normalizeUrl(body?.url);
+        if (body?.url && !urlInfo.ok) {
+            return NextResponse.json({ error: 'URL 非法' }, { status: 400 });
+        }
+
         let initialIconType = body.iconType;
         let initialCustomIconUrl = body.customIconUrl;
         let shouldDownload = false;
         let downloadUrl = '';
 
-        if (body.iconType === 'auto' && body.url) {
+        if (body.iconType === 'auto' && urlInfo.url) {
             try {
-                const domain = new URL(body.url).hostname;
+                const domain = new URL(urlInfo.url).hostname;
                 downloadUrl = getFaviconUrl(domain);
                 initialIconType = 'upload';
                 initialCustomIconUrl = downloadUrl;
@@ -156,7 +214,7 @@ export async function PUT(request: Request) {
             where: { id: body.id },
             data: {
                 name: body.name,
-                url: body.url,
+                url: body.url ? urlInfo.url : undefined,
                 desc: body.desc,
                 category: body.category,
                 color: body.color,
@@ -169,7 +227,7 @@ export async function PUT(request: Request) {
                 descColor: body.descColor,
                 titleSize: body.titleSize ? parseInt(body.titleSize) : null,
                 descSize: body.descSize ? parseInt(body.descSize) : null,
-                order: body.order,
+                order: body.order === undefined ? undefined : normalizeSiteOrder(body.order, 0),
                 isHidden: body.isHidden
             }
         });
@@ -180,6 +238,17 @@ export async function PUT(request: Request) {
 
         return NextResponse.json(site);
     } catch (error) {
+        console.error('[Sites API] PUT error:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('does not exist in the current database')) {
+            return NextResponse.json(
+                {
+                    error: '数据库结构不兼容（可能是旧版 dev.db 未升级），请先完成数据库迁移/重建。',
+                    details: process.env.NODE_ENV === 'production' ? undefined : message
+                },
+                { status: 500 }
+            );
+        }
         return NextResponse.json({ error: 'Failed to update site' }, { status: 500 });
     }
 }
@@ -188,6 +257,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
@@ -200,6 +270,7 @@ export async function DELETE(request: Request) {
         await prisma.site.delete({ where: { id } });
         return NextResponse.json({ success: true });
     } catch (error) {
+        console.error('[Sites API] DELETE error:', error);
         return NextResponse.json({ error: 'Failed to delete site' }, { status: 500 });
     }
 }

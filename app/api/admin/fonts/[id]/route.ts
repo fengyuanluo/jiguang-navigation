@@ -1,14 +1,13 @@
-
-import { PrismaClient } from '@prisma/client';
 import { NextResponse } from 'next/server';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 
 export async function DELETE(
     request: Request,
     props: { params: Promise<{ id: string }> }
 ) {
     try {
+        await ensureSqliteDbSchema();
         const params = await props.params;
         const id = params.id;
         await prisma.customFont.delete({

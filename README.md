@@ -142,10 +142,36 @@ Built with the latest web technologies, it offers a stunning visual experience w
    ```
 
 5. **Open Browser | 打开浏览器**
-   Visit `http://localhost:3000` to see your new start page!  
-   访问 `http://localhost:3000` 查看您的新起始页！
+Visit `http://localhost:3000` to see your new start page!  
+访问 `http://localhost:3000` 查看您的新起始页！
 
 ---
+
+## 🧯 Troubleshooting | 常见问题
+
+### 1) 插件新增站点后接口 500 / Prisma 报错 “column ... does not exist”
+
+如果你是 Docker 部署并且复用了旧的 `/app/data/dev.db`（持久化卷），升级镜像后数据库结构可能落后于最新 `schema.prisma`，会在 `POST /api/sites`、`GET /api/init` 等接口触发 Prisma 报错。
+
+当前版本已加入 **SQLite 运行时自迁移**：服务端会在处理请求前自动补齐缺失表/缺失字段，避免因为“缺列”直接崩溃。
+
+> 仍然异常时：请检查容器日志中是否有 `database is locked`、权限问题或 DB 文件路径错误；必要时备份后重建数据库。
+
+### 2) `order` 字段溢出（毫秒时间戳写入导致）
+
+`Site.order` 在 Prisma 中是 `Int`（32 位），如果外部脚本/插件把 `Date.now()`（毫秒）直接写入，可能触发 `does not fit in an INT column`。
+
+建议：
+- 统一写入“秒级时间戳”（`Math.floor(Date.now()/1000)`）或纯排序号（0..N）
+- 服务端已做兜底：会自动把明显的毫秒时间戳换算为秒，并对超大值进行钳制
+
+### 3) SQLite `DATABASE_URL` 路径相对位置
+
+SQLite 的 `file:./xxx.db` 是 **相对 `prisma/schema.prisma` 所在目录** 解析的。
+
+示例：
+- `DATABASE_URL="file:./dev.db"` 实际指向 `prisma/dev.db`
+- 若你想指向项目根目录 `dev.db`，应使用 `DATABASE_URL="file:../dev.db"`
 
 ## 🐳 Docker Deployment | Docker 部署
 

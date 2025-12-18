@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const { username, password } = await request.json();
         const user = await prisma.user.findUnique({ where: { username } });
 

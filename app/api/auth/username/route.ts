@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 import bcrypt from 'bcryptjs';
 
 export async function PUT(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const { oldUsername, password, newUsername } = await request.json();
 
         if (!oldUsername || !password || !newUsername) {

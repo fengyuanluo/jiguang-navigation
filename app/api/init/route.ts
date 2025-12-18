@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 
 export async function GET() {
     try {
+        await ensureSqliteDbSchema();
         console.log('[Init API] Loading data...');
         console.log('[Init API] DATABASE_URL:', process.env.DATABASE_URL);
 

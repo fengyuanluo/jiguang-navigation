@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 import { downloadAndSaveIcon } from '@/lib/icon-downloader';
 
 const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const { siteId } = await request.json();
 
         if (!siteId) {

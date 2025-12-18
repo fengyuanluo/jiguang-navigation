@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import * as path from 'path';
 
@@ -7,6 +8,7 @@ const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'wallpapers', '
 
 export async function GET(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const { searchParams } = new URL(request.url);
         const type = searchParams.get('type');
 
@@ -24,6 +26,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const formData = await request.formData();
         const file = formData.get('file') as unknown as File;
 
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
 

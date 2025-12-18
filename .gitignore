@@ -53,3 +53,8 @@ Thumbs.db
 # 工具/本地导出
 .serena/
 OneNav_Export_*.html
+
+# SQLite 临时文件（WAL/SHM/Journal）
+*.db-wal
+*.db-shm
+*.db-journal

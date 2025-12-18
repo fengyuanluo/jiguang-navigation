@@ -1,12 +1,11 @@
-
-import { PrismaClient } from '@prisma/client';
 import { NextResponse } from 'next/server';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 
 // GET: List all saved custom fonts
 export async function GET() {
     try {
+        await ensureSqliteDbSchema();
         const fonts = await prisma.customFont.findMany({
             orderBy: { createdAt: 'desc' }
         });
@@ -19,6 +18,7 @@ export async function GET() {
 // POST: Add a new custom font (link to fonts.loli.net)
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const body = await request.json();
         /* 
            Body: { name: "Open Sans", family: "Open Sans" } 

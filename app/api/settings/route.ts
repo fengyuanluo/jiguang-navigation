@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
 
 export async function PUT(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const body = await request.json();
         const { layout, config, theme } = body;
 

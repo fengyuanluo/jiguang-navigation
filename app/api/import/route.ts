@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureSqliteDbSchema } from '@/lib/db-migrate';
+import { normalizeSiteOrder } from '@/lib/site-order';
 
 export async function POST(request: Request) {
     try {
+        await ensureSqliteDbSchema();
         const data = await request.json();
         const { sites, categories, categoryColors, layout, config, theme, hiddenCategories, customFonts } = data;
 
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
                         icon: site.icon,
                         iconType: site.iconType,
                         customIconUrl: site.customIconUrl,
-                        order: site.order || 0,
+                        order: normalizeSiteOrder(site.order, 0),
                         isHidden: site.isHidden || false,
                         titleFont: site.titleFont,
                         descFont: site.descFont,
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
                         icon: site.icon,
                         iconType: site.iconType,
                         customIconUrl: site.customIconUrl,
-                        order: site.order || 0,
+                        order: normalizeSiteOrder(site.order, 0),
                         isHidden: site.isHidden || false,
                         titleFont: site.titleFont,
                         descFont: site.descFont,
